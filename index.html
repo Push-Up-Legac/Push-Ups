@@ -35,7 +35,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-of
 .hud{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;padding:10px 14px;pointer-events:none;font-family:"Barlow Condensed","Arial Narrow",Impact,sans-serif;font-weight:800;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.7)}
 #count{font-size:clamp(88px,26vw,170px);line-height:.9}
 #time{font-size:clamp(40px,10vw,64px);line-height:1}
-#dbg{position:absolute;left:0;right:0;bottom:0;padding:18px 12px 8px;color:#fff;font-weight:600;font-size:15px;background:linear-gradient(transparent,rgba(0,0,0,.7));pointer-events:none}
+#poseinfo{position:absolute;left:0;right:0;bottom:0;padding:18px 12px 8px;color:#fff;font-weight:600;font-size:15px;background:linear-gradient(transparent,rgba(0,0,0,.7));pointer-events:none}
 #big{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Barlow Condensed","Arial Narrow",Impact,sans-serif;font-weight:800;font-size:clamp(120px,40vw,260px);color:#fff;text-shadow:0 4px 20px rgba(0,0,0,.8);pointer-events:none}
 #status{min-height:2.9em;margin:12px 0 0;color:var(--fg);font-weight:600}
 .res{display:grid;gap:10px;margin:14px 0}
@@ -82,7 +82,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
     <video id="vid" playsinline muted autoplay></video>
     <canvas id="ov" width="640" height="480"></canvas>
     <div class="hud"><div id="count">0</div><div id="time"></div></div>
-    <div id="dbg"></div>
+    <div id="poseinfo"></div>
     <div id="big"></div>
   </div>
   <p id="status"></p>
@@ -130,7 +130,7 @@ function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;
 function show(id){["setup","cam","result"].forEach(function(s){$("#"+s).classList.toggle("hide",s!==id)})}
 function status(t){$("#status").textContent=t}
 function big(t){$("#big").textContent=t}
-function dbg(t){$("#dbg").textContent=t}
+function dbg(t){$("#poseinfo").textContent=t}
 function beep(f,d){
   try{
     if(!audio)audio=new (window.AudioContext||window.webkitAudioContext)();
@@ -345,3 +345,351 @@ buildModes();
 </script>
 </body>
 </html>
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Liegestütz-Challenge</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&display=swap">
+<style>
+:root{color-scheme:light;--bg:#eef1f6;--card:#fff;--fg:#101522;--mut:#5a6479;--line:#d5dbe8;--acc:#2457ff;--acct:#fff;--ok:#12a150;--bad:#d93a3a;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0d1220;--card:#161d30;--fg:#eef2fb;--mut:#97a3bd;--line:#26304a;--acc:#5b86ff;--acct:#0d1220;--ok:#3ddc84;--bad:#ff6b6b}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0d1220;--card:#161d30;--fg:#eef2fb;--mut:#97a3bd;--line:#26304a;--acc:#5b86ff;--acct:#0d1220;--ok:#3ddc84;--bad:#ff6b6b}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+main{max-width:760px;margin:0 auto;padding:20px 16px 40px}
+h1{font-family:"Barlow Condensed","Arial Narrow",Impact,sans-serif;font-weight:800;font-size:44px;line-height:1;margin:8px 0 6px;letter-spacing:.5px}
+h2{font-size:18px;margin:22px 0 8px}
+p{margin:0 0 10px;color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+label{display:block;font-weight:600;margin:10px 0 4px}
+input[type=text]{width:100%;font:inherit;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:14px 18px;background:var(--acc);color:var(--acct);cursor:pointer;min-height:48px}
+button.sec{background:transparent;color:var(--fg);border:1.5px solid var(--line)}
+button:disabled{opacity:.4;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.modes{display:grid;gap:8px}
+.mode{text-align:left;background:var(--bg);color:var(--fg);border:2px solid var(--line);font-weight:600}
+.mode[aria-pressed="true"]{border-color:var(--acc);background:var(--card)}
+.mode small{display:block;font-weight:400;color:var(--mut)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row>*{flex:1 1 140px}
+.hide{display:none!important}
+.stage{touch-action:manipulation;user-select:none;-webkit-user-select:none;position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:4/3}
+.stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.hud{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;padding:10px 14px;pointer-events:none;font-family:"Barlow Condensed","Arial Narrow",Impact,sans-serif;font-weight:800;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.7)}
+#count{font-size:clamp(88px,26vw,170px);line-height:.9}
+#time{font-size:clamp(40px,10vw,64px);line-height:1}
+#poseinfo{position:absolute;left:0;right:0;bottom:0;padding:18px 12px 8px;color:#fff;font-weight:600;font-size:15px;background:linear-gradient(transparent,rgba(0,0,0,.7));pointer-events:none}
+#big{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Barlow Condensed","Arial Narrow",Impact,sans-serif;font-weight:800;font-size:clamp(120px,40vw,260px);color:#fff;text-shadow:0 4px 20px rgba(0,0,0,.8);pointer-events:none}
+#status{min-height:2.9em;margin:12px 0 0;color:var(--fg);font-weight:600}
+.res{display:grid;gap:10px;margin:14px 0}
+.pl{display:flex;justify-content:space-between;align-items:baseline;padding:14px 16px;border-radius:14px;border:2px solid var(--line);background:var(--card)}
+.pl.win{border-color:var(--ok)}
+.pl b{font-size:18px}
+.pl span{font-family:"Barlow Condensed","Arial Narrow",Impact,sans-serif;font-weight:800;font-size:44px;line-height:1}
+.err{color:var(--bad);font-weight:600}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.chk{display:flex;gap:10px;align-items:center;font-weight:600;margin:14px 0 4px}
+.chk input{width:22px;height:22px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+
+<section id="setup">
+  <h1>Liegestütz-Challenge</h1>
+  <p>Das iPad erkennt über die Kamera deinen Körper und zählt die Liegestütze. Stell es seitlich auf den Boden, sodass dein ganzer Körper im Bild ist.</p>
+  <div class="card">
+    <label for="n1">Dein Name</label>
+    <input id="n1" type="text" value="Felix" maxlength="16" autocomplete="off">
+    <label class="chk"><input id="two" type="checkbox"> Freund einladen (nacheinander am selben iPad)</label>
+    <div id="n2w" class="hide">
+      <label for="n2">Name deines Freundes</label>
+      <input id="n2" type="text" value="Freund" maxlength="16" autocomplete="off">
+    </div>
+    <h2>Challenge</h2>
+    <div class="modes" id="modes"></div>
+    <p id="rec" style="margin-top:12px"></p>
+    <button id="go" style="width:100%;margin-top:6px">Kamera starten</button>
+    <button id="nocam" class="sec" style="width:100%;margin-top:10px">Ohne Kamera spielen (mit der Nase tippen)</button>
+    <p id="msg" style="margin-top:10px;font-weight:600"></p>
+  </div>
+</section>
+
+<section id="cam" class="hide">
+  <div class="row" style="margin-bottom:10px">
+    <b id="who" style="font-size:20px;flex:2 1 200px"></b>
+    <button class="sec" id="back">Zurück zum Menü</button>
+  </div>
+  <div class="stage">
+    <video id="vid" playsinline muted autoplay></video>
+    <canvas id="ov" width="640" height="480"></canvas>
+    <div class="hud"><div id="count">0</div><div id="time"></div></div>
+    <div id="poseinfo"></div>
+    <div id="big"></div>
+  </div>
+  <p id="status"></p>
+  <div class="row">
+    <button id="start">Start</button>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button class="sec" id="minus">−1</button>
+    <button class="sec" id="plus">+1 (manuell)</button>
+  </div>
+  <label for="sens">Empfindlichkeit</label>
+  <input id="sens" type="range" min="1" max="10" value="6">
+  <p>Die Linie im Bild zeigt Schulter, Ellbogen und Handgelenk. Unten siehst du den Ellbogenwinkel. Zählt es zu wenig, erhöhe die Empfindlichkeit.</p>
+</section>
+
+<section id="result" class="hide">
+  <h1 id="rt">Ergebnis</h1>
+  <div class="res" id="rl"></div>
+  <p id="rr"></p>
+  <div class="row">
+    <button id="next" class="hide"></button>
+    <button id="again">Nochmal</button>
+    <button class="sec" id="menu">Neue Challenge</button>
+  </div>
+</section>
+
+</main>
+<script>
+(function(){
+"use strict";
+var $=function(s){return document.querySelector(s)};
+var MP="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+var MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+var MODES={
+  t60:{label:"60 Sekunden",desc:"So viele Liegestütze wie möglich in einer Minute",time:60},
+  t30:{label:"30 Sekunden",desc:"Kurzer Sprint, volle Power",time:30},
+  r10:{label:"Zeitrennen",desc:"10 Liegestütze so schnell wie möglich",target:10}
+};
+var S={mode:"t60",names:["",""],two:false,cur:0,res:[]};
+var lmk=null,stream=null,stage="idle",noCam=false,audio=null,busy=false;
+var count=0,t0=0,sm=null,state="wait",lastRep=0,lastT=-1;
+
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function show(id){["setup","cam","result"].forEach(function(s){$("#"+s).classList.toggle("hide",s!==id)})}
+function status(t){$("#status").textContent=t}
+function big(t){$("#big").textContent=t}
+function dbg(t){$("#poseinfo").textContent=t}
+function beep(f,d){
+  try{
+    if(!audio)audio=new (window.AudioContext||window.webkitAudioContext)();
+    if(audio.state==="suspended")audio.resume();
+    var o=audio.createOscillator(),g=audio.createGain();
+    o.frequency.value=f;g.gain.value=.12;o.connect(g);g.connect(audio.destination);
+    o.start();o.stop(audio.currentTime+d);
+  }catch(e){}
+}
+function best(){try{var v=localStorage.getItem("pc-best-"+S.mode);return v?parseFloat(v):null}catch(e){return null}}
+function saveBest(v){
+  try{
+    var b=best(),m=MODES[S.mode];
+    if(b===null||(m.time?v>b:v<b)){localStorage.setItem("pc-best-"+S.mode,String(v));return true}
+  }catch(e){}
+  return false;
+}
+function fmtBest(){
+  var b=best();
+  if(b===null)return "Noch kein Rekord. Mach den ersten!";
+  return "Dein Rekord: "+(MODES[S.mode].time?b+" Liegestütze":b.toFixed(1)+" Sekunden");
+}
+
+/* ---------- Menü ---------- */
+function buildModes(){
+  var box=$("#modes");box.innerHTML="";
+  Object.keys(MODES).forEach(function(k){
+    var b=document.createElement("button");
+    b.className="mode";b.setAttribute("aria-pressed",k===S.mode);
+    b.innerHTML=esc(MODES[k].label)+"<small>"+esc(MODES[k].desc)+"</small>";
+    b.onclick=function(){S.mode=k;buildModes()};
+    box.appendChild(b);
+  });
+  $("#rec").textContent=fmtBest();
+}
+function readNames(){
+  S.two=$("#two").checked;
+  S.names=[$("#n1").value.trim()||"Spieler 1",$("#n2").value.trim()||"Spieler 2"];
+  S.cur=0;S.res=[];
+}
+$("#two").onchange=function(){$("#n2w").classList.toggle("hide",!this.checked)};
+
+async function loadModel(){
+  if(lmk)return;
+  var mod=await import(MP+"/vision_bundle.mjs");
+  var fs=await mod.FilesetResolver.forVisionTasks(MP+"/wasm");
+  lmk=await mod.PoseLandmarker.createFromOptions(fs,{
+    baseOptions:{modelAssetPath:MODEL,delegate:"CPU"},
+    runningMode:"VIDEO",numPoses:1,
+    minPoseDetectionConfidence:.4,minPosePresenceConfidence:.4,minTrackingConfidence:.4
+  });
+}
+$("#go").onclick=async function(){
+  if(busy)return;busy=true;
+  readNames();noCam=false;beep(1,.01);
+  var m=$("#msg");m.className="";m.style.color="";
+  $("#go").disabled=true;
+  try{
+    if(!stream){
+      m.textContent="Kamera wird gestartet …";
+      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}},audio:false});
+      var v=$("#vid");v.srcObject=stream;await v.play();
+    }
+    m.textContent="Körper-Erkennung wird geladen (beim ersten Mal etwa 10 Sekunden) …";
+    await loadModel();
+    m.textContent="";
+    prepare();
+  }catch(e){
+    m.className="err";
+    m.textContent="Das hat nicht geklappt ("+(e&&e.name?e.name:"Fehler")+": "+(e&&e.message?e.message:"")+"). Prüfe die Internetverbindung und den Kamerazugriff, oder spiel ohne Kamera.";
+  }
+  busy=false;$("#go").disabled=false;
+};
+$("#nocam").onclick=function(){readNames();noCam=true;beep(1,.01);prepare()};
+function prepare(){
+  show("cam");stage="ready";count=0;
+  $("#vid").style.display=noCam?"none":"";$("#ov").style.display=noCam?"none":"";
+  $("#count").textContent="0";$("#time").textContent="";big("");
+  dbg(noCam?"":"Suche nach deinem Körper …");
+  $("#who").textContent="Dran ist: "+S.names[S.cur];
+  $("#start").disabled=false;
+  status(noCam?"Stell das iPad auf den Boden. Bei jedem Liegestütz tippst du mit der Nase auf den Bildschirm. Dann Start.":"Stell das iPad seitlich auf den Boden, sodass dein ganzer Körper zu sehen ist. Siehst du die Linie am Arm, drück Start.");
+}
+
+/* ---------- Erkennung ---------- */
+function ang(a,b,c){
+  var v1x=a.x-b.x,v1y=a.y-b.y,v2x=c.x-b.x,v2y=c.y-b.y;
+  var d=Math.hypot(v1x,v1y)*Math.hypot(v2x,v2y);
+  if(!d)return 180;
+  return Math.acos(Math.max(-1,Math.min(1,(v1x*v2x+v1y*v2y)/d)))*180/Math.PI;
+}
+function process(lm,c,vw,vh){
+  var L=[11,13,15,23],R=[12,14,16,24];
+  var vis=function(ix){return ix.reduce(function(s,i){return s+(lm[i].visibility||0)},0)};
+  var ix=vis(L)>=vis(R)?L:R;
+  var p=ix.map(function(i){return{x:lm[i].x*vw,y:lm[i].y*vh,v:lm[i].visibility||0}});
+  c.lineWidth=6;c.lineCap="round";c.strokeStyle="#35d6ff";c.fillStyle="#ffd23f";
+  c.beginPath();c.moveTo(p[0].x,p[0].y);c.lineTo(p[1].x,p[1].y);c.lineTo(p[2].x,p[2].y);c.stroke();
+  c.strokeStyle="rgba(255,255,255,.7)";c.beginPath();c.moveTo(p[0].x,p[0].y);c.lineTo(p[3].x,p[3].y);c.stroke();
+  p.forEach(function(q){c.beginPath();c.arc(q.x,q.y,8,0,7);c.fill()});
+  if(Math.min(p[0].v,p[1].v,p[2].v)<.3){dbg("Arm nicht erkannt: ganz ins Bild, Seitenansicht");return}
+  var a=ang(p[0],p[1],p[2]);
+  sm=sm===null?a:sm*.5+a*.5;
+  var horiz=p[3].v<.3||Math.abs(p[0].x-p[3].x)>.8*Math.abs(p[0].y-p[3].y);
+  var s=+$("#sens").value,downT=85+s*5,upT=170-s*2.5;
+  dbg("Ellbogenwinkel: "+Math.round(sm)+"°   runter unter "+downT+"°, hoch über "+Math.round(upT)+"°"+(horiz?"":"   Körper nicht waagerecht"));
+  if(stage!=="run"||!horiz)return;
+  var now=performance.now();
+  if(state==="wait"){if(sm>upT)state="up"}
+  else if(state==="up"){if(sm<downT)state="down"}
+  else if(state==="down"&&sm>upT&&now-lastRep>350){state="up";lastRep=now;addRep(1)}
+}
+function loop(){
+  requestAnimationFrame(loop);
+  var v=$("#vid");
+  if(noCam||!lmk||!v.videoWidth||v.currentTime===lastT||$("#cam").classList.contains("hide"))return;
+  lastT=v.currentTime;
+  var res;
+  try{res=lmk.detectForVideo(v,performance.now())}catch(e){return}
+  var ov=$("#ov");
+  if(ov.width!==v.videoWidth){ov.width=v.videoWidth;ov.height=v.videoHeight}
+  var c=ov.getContext("2d");c.clearRect(0,0,ov.width,ov.height);
+  if(!res.landmarks||!res.landmarks.length){dbg("Niemand erkannt: ganz ins Bild, Seitenansicht");return}
+  process(res.landmarks[0],c,v.videoWidth,v.videoHeight);
+}
+requestAnimationFrame(loop);
+
+/* ---------- Spielablauf ---------- */
+$("#start").onclick=async function(){
+  if(busy)return;busy=true;
+  $("#start").disabled=true;stage="countdown";
+  status("Geh in Liegestütz-Position, ganz im Bild, Seitenansicht.");
+  for(var i=5;i>0;i--){big(i);beep(i===1?880:660,.1);await sleep(1000)}
+  big("");beep(1000,.3);
+  count=0;sm=null;state="wait";lastRep=0;t0=performance.now();
+  $("#count").textContent="0";stage="run";busy=false;
+  status("Los! Geh ganz runter und komm ganz hoch.");
+};
+setInterval(function(){
+  if(stage!=="run")return;
+  var el=(performance.now()-t0)/1000,m=MODES[S.mode];
+  if(m.time){
+    var left=Math.max(0,m.time-el);
+    $("#time").textContent=Math.ceil(left)+" s";
+    if(left<=0)finish(el);
+  }else $("#time").textContent=el.toFixed(1)+" s";
+},100);
+function addRep(d){
+  if(stage!=="run")return;
+  count=Math.max(0,count+d);
+  $("#count").textContent=count;
+  if(d>0)beep(520,.06);
+  var m=MODES[S.mode];
+  if(m.target&&count>=m.target)finish((performance.now()-t0)/1000);
+}
+$("#plus").onclick=function(){addRep(1)};
+$("#minus").onclick=function(){addRep(-1)};
+$(".stage").onpointerdown=function(){if(noCam)addRep(1)};
+
+/* ---------- Ergebnis ---------- */
+function finish(el){
+  if(stage!=="run")return;
+  stage="done";beep(500,.5);
+  var m=MODES[S.mode];
+  S.res[S.cur]={name:S.names[S.cur],count:count,time:el,ok:m.time?true:count>=m.target};
+  if(S.two&&S.cur===0){S.cur=1;showResult(false)}else showResult(true);
+}
+function score(r){
+  return MODES[S.mode].time?r.count+" ":r.ok?r.time.toFixed(1)+" s":r.count+"/"+MODES[S.mode].target;
+}
+function showResult(fin){
+  show("result");
+  var box=$("#rl");box.innerHTML="";
+  var m=MODES[S.mode],win=-1;
+  if(fin&&S.res.length===2){
+    var a=S.res[0],b=S.res[1];
+    if(m.time){win=a.count===b.count?-1:a.count>b.count?0:1}
+    else if(a.ok&&b.ok){win=a.time===b.time?-1:a.time<b.time?0:1}
+    else if(a.ok!==b.ok){win=a.ok?0:1}
+    else win=a.count===b.count?-1:a.count>b.count?0:1;
+  }
+  S.res.forEach(function(r,i){
+    var d=document.createElement("div");
+    d.className="pl"+(i===win?" win":"");
+    d.innerHTML="<b>"+esc(r.name)+(i===win?" 🏆":"")+"</b><span>"+esc(score(r))+"</span>";
+    box.appendChild(d);
+  });
+  var nx=$("#next");
+  if(!fin){
+    $("#rt").textContent="Stark, "+S.res[0].name+"!";
+    nx.classList.remove("hide");nx.textContent="Weiter: "+S.names[1];
+    nx.onclick=function(){prepare()};
+    $("#rr").textContent="Jetzt ist "+S.names[1]+" dran. Stell das iPad so hin, dass dein Freund gut im Bild ist.";
+    $("#again").classList.add("hide");
+  }else{
+    nx.classList.add("hide");$("#again").classList.remove("hide");
+    $("#rt").textContent=win>=0?S.res[win].name+" gewinnt!":(S.res.length===2?"Unentschieden!":"Geschafft!");
+    var rec=false;
+    S.res.forEach(function(r){
+      var v=m.time?r.count:(r.ok?Math.round(r.time*10)/10:null);
+      if(v!==null&&saveBest(v))rec=true;
+    });
+    $("#rr").textContent=(rec?"Neuer Rekord! ":"")+fmtBest();
+  }
+}
+$("#again").onclick=function(){S.cur=0;S.res=[];prepare()};
+$("#menu").onclick=function(){S.cur=0;S.res=[];buildModes();show("setup")};
+$("#back").onclick=function(){stage="idle";S.cur=0;S.res=[];buildModes();show("setup")};
+
+buildModes();
+})();
+</script>
+</body>
+</html>
+
