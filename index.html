@@ -32,10 +32,10 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-of
 .hide{display:none!important}
 .stage{touch-action:manipulation;user-select:none;-webkit-user-select:none;position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:4/3}
 .stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
-#mask{opacity:.45;mix-blend-mode:screen}
 .hud{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;padding:10px 14px;pointer-events:none;font-family:"Barlow Condensed","Arial Narrow",Impact,sans-serif;font-weight:800;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.7)}
 #count{font-size:clamp(88px,26vw,170px);line-height:.9}
 #time{font-size:clamp(40px,10vw,64px);line-height:1}
+#dbg{position:absolute;left:0;right:0;bottom:0;padding:18px 12px 8px;color:#fff;font-weight:600;font-size:15px;background:linear-gradient(transparent,rgba(0,0,0,.7));pointer-events:none}
 #big{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Barlow Condensed","Arial Narrow",Impact,sans-serif;font-weight:800;font-size:clamp(120px,40vw,260px);color:#fff;text-shadow:0 4px 20px rgba(0,0,0,.8);pointer-events:none}
 #status{min-height:2.9em;margin:12px 0 0;color:var(--fg);font-weight:600}
 .res{display:grid;gap:10px;margin:14px 0}
@@ -55,7 +55,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 
 <section id="setup">
   <h1>Liegestütz-Challenge</h1>
-  <p>Das iPad zählt deine Liegestütze über die Kamera. Stell es seitlich auf den Boden, sodass dein ganzer Körper im Bild ist.</p>
+  <p>Das iPad erkennt über die Kamera deinen Körper und zählt die Liegestütze. Stell es seitlich auf den Boden, sodass dein ganzer Körper im Bild ist.</p>
   <div class="card">
     <label for="n1">Dein Name</label>
     <input id="n1" type="text" value="Felix" maxlength="16" autocomplete="off">
@@ -69,7 +69,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
     <p id="rec" style="margin-top:12px"></p>
     <button id="go" style="width:100%;margin-top:6px">Kamera starten</button>
     <button id="nocam" class="sec" style="width:100%;margin-top:10px">Ohne Kamera spielen (mit der Nase tippen)</button>
-    <p id="err" class="err" style="margin-top:10px"></p>
+    <p id="msg" style="margin-top:10px;font-weight:600"></p>
   </div>
 </section>
 
@@ -80,14 +80,14 @@ input[type=range]{width:100%;accent-color:var(--acc)}
   </div>
   <div class="stage">
     <video id="vid" playsinline muted autoplay></video>
-    <canvas id="mask" width="80" height="60"></canvas>
+    <canvas id="ov" width="640" height="480"></canvas>
     <div class="hud"><div id="count">0</div><div id="time"></div></div>
+    <div id="dbg"></div>
     <div id="big"></div>
   </div>
   <p id="status"></p>
   <div class="row">
-    <button id="bgb">1. Hintergrund aufnehmen</button>
-    <button id="start" disabled>2. Start</button>
+    <button id="start">Start</button>
   </div>
   <div class="row" style="margin-top:10px">
     <button class="sec" id="minus">−1</button>
@@ -95,7 +95,7 @@ input[type=range]{width:100%;accent-color:var(--acc)}
   </div>
   <label for="sens">Empfindlichkeit</label>
   <input id="sens" type="range" min="1" max="10" value="6">
-  <p>Tipp: Der helle Schleier im Bild zeigt, was die App als Körper erkennt. Zählt sie zu wenig, erhöhe die Empfindlichkeit.</p>
+  <p>Die Linie im Bild zeigt Schulter, Ellbogen und Handgelenk. Unten siehst du den Ellbogenwinkel. Zählt es zu wenig, erhöhe die Empfindlichkeit.</p>
 </section>
 
 <section id="result" class="hide">
@@ -114,25 +114,23 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 (function(){
 "use strict";
 var $=function(s){return document.querySelector(s)};
-var W=80,H=60;
+var MP="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+var MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 var MODES={
   t60:{label:"60 Sekunden",desc:"So viele Liegestütze wie möglich in einer Minute",time:60},
   t30:{label:"30 Sekunden",desc:"Kurzer Sprint, volle Power",time:30},
   r10:{label:"Zeitrennen",desc:"10 Liegestütze so schnell wie möglich",target:10}
 };
 var S={mode:"t60",names:["",""],two:false,cur:0,res:[]};
-var grabCv=document.createElement("canvas");grabCv.width=W;grabCv.height=H;
-var gx=grabCv.getContext("2d",{willReadFrequently:true});
-var mx=$("#mask").getContext("2d");
-var mImg=mx.createImageData(W,H);
-var bg=null,stream=null,stage="idle",timer=null,audio=null,noCam=false;
-var sm=null,hi=0,lo=0,state="up",lastRep=0,t0=0,count=0,busy=false;
+var lmk=null,stream=null,stage="idle",noCam=false,audio=null,busy=false;
+var count=0,t0=0,sm=null,state="wait",lastRep=0,lastT=-1;
 
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function show(id){["setup","cam","result"].forEach(function(s){$("#"+s).classList.toggle("hide",s!==id)})}
 function status(t){$("#status").textContent=t}
 function big(t){$("#big").textContent=t}
+function dbg(t){$("#dbg").textContent=t}
 function beep(f,d){
   try{
     if(!audio)audio=new (window.AudioContext||window.webkitAudioContext)();
@@ -142,9 +140,7 @@ function beep(f,d){
     o.start();o.stop(audio.currentTime+d);
   }catch(e){}
 }
-function best(){
-  try{var v=localStorage.getItem("pc-best-"+S.mode);return v?parseFloat(v):null}catch(e){return null}
-}
+function best(){try{var v=localStorage.getItem("pc-best-"+S.mode);return v?parseFloat(v):null}catch(e){return null}}
 function saveBest(v){
   try{
     var b=best(),m=MODES[S.mode];
@@ -165,115 +161,123 @@ function buildModes(){
     var b=document.createElement("button");
     b.className="mode";b.setAttribute("aria-pressed",k===S.mode);
     b.innerHTML=esc(MODES[k].label)+"<small>"+esc(MODES[k].desc)+"</small>";
-    b.onclick=function(){S.mode=k;buildModes();$("#rec").textContent=fmtBest()};
+    b.onclick=function(){S.mode=k;buildModes()};
     box.appendChild(b);
   });
   $("#rec").textContent=fmtBest();
 }
-$("#two").onchange=function(){$("#n2w").classList.toggle("hide",!this.checked)};
-$("#go").onclick=async function(){
+function readNames(){
   S.two=$("#two").checked;
   S.names=[$("#n1").value.trim()||"Spieler 1",$("#n2").value.trim()||"Spieler 2"];
-  S.cur=0;S.res=[];noCam=false;
-  beep(1,.01);
+  S.cur=0;S.res=[];
+}
+$("#two").onchange=function(){$("#n2w").classList.toggle("hide",!this.checked)};
+
+async function loadModel(){
+  if(lmk)return;
+  var mod=await import(MP+"/vision_bundle.mjs");
+  var fs=await mod.FilesetResolver.forVisionTasks(MP+"/wasm");
+  lmk=await mod.PoseLandmarker.createFromOptions(fs,{
+    baseOptions:{modelAssetPath:MODEL,delegate:"CPU"},
+    runningMode:"VIDEO",numPoses:1,
+    minPoseDetectionConfidence:.4,minPosePresenceConfidence:.4,minTrackingConfidence:.4
+  });
+}
+$("#go").onclick=async function(){
+  if(busy)return;busy=true;
+  readNames();noCam=false;beep(1,.01);
+  var m=$("#msg");m.className="";m.style.color="";
+  $("#go").disabled=true;
   try{
     if(!stream){
+      m.textContent="Kamera wird gestartet …";
       stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}},audio:false});
       var v=$("#vid");v.srcObject=stream;await v.play();
-      if(!timer)timer=setInterval(tick,50);
     }
-    $("#err").textContent="";
+    m.textContent="Körper-Erkennung wird geladen (beim ersten Mal etwa 10 Sekunden) …";
+    await loadModel();
+    m.textContent="";
     prepare();
   }catch(e){
-    var inFrame=false;try{inFrame=window.self!==window.top}catch(x){inFrame=true}
-    $("#err").textContent="Kamera nicht verfügbar ("+(e&&e.name?e.name:"Fehler")+(window.isSecureContext?"":", keine sichere Verbindung")+(inFrame?", Seite läuft eingebettet":"")+"). Du kannst stattdessen ohne Kamera spielen: Tippe bei jedem Liegestütz mit der Nase auf den Bildschirm.";
+    m.className="err";
+    m.textContent="Das hat nicht geklappt ("+(e&&e.name?e.name:"Fehler")+": "+(e&&e.message?e.message:"")+"). Prüfe die Internetverbindung und den Kamerazugriff, oder spiel ohne Kamera.";
   }
+  busy=false;$("#go").disabled=false;
 };
-$("#nocam").onclick=function(){
-  S.two=$("#two").checked;
-  S.names=[$("#n1").value.trim()||"Spieler 1",$("#n2").value.trim()||"Spieler 2"];
-  S.cur=0;S.res=[];noCam=true;beep(1,.01);
-  if(!timer)timer=setInterval(tick,50);
-  prepare();
-};
+$("#nocam").onclick=function(){readNames();noCam=true;beep(1,.01);prepare()};
 function prepare(){
-  show("cam");stage=(bg||noCam)?"ready":"needbg";count=0;
-  $("#vid").style.display=noCam?"none":"";$("#mask").style.display=noCam?"none":"";$("#bgb").classList.toggle("hide",noCam);
+  show("cam");stage="ready";count=0;
+  $("#vid").style.display=noCam?"none":"";$("#ov").style.display=noCam?"none":"";
   $("#count").textContent="0";$("#time").textContent="";big("");
+  dbg(noCam?"":"Suche nach deinem Körper …");
   $("#who").textContent="Dran ist: "+S.names[S.cur];
-  $("#start").disabled=!(bg||noCam);$("#bgb").disabled=false;
-  status(noCam?"Stell das iPad auf den Boden. Bei jedem Liegestütz tippst du mit der Nase auf den Bildschirm. Drück dann Start.":bg?"Hintergrund gespeichert. Geh in Position und drück Start.":"Zuerst den leeren Hintergrund aufnehmen: Drück den Knopf und geh danach aus dem Bild.");
+  $("#start").disabled=false;
+  status(noCam?"Stell das iPad auf den Boden. Bei jedem Liegestütz tippst du mit der Nase auf den Bildschirm. Dann Start.":"Stell das iPad seitlich auf den Boden, sodass dein ganzer Körper zu sehen ist. Siehst du die Linie am Arm, drück Start.");
 }
 
-/* ---------- Kamera und Erkennung ---------- */
-function grab(){
-  var v=$("#vid");if(!v.videoWidth)return null;
-  gx.drawImage(v,0,0,W,H);
-  var d=gx.getImageData(0,0,W,H).data,g=new Float32Array(W*H);
-  for(var i=0;i<W*H;i++)g[i]=d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11;
-  return g;
+/* ---------- Erkennung ---------- */
+function ang(a,b,c){
+  var v1x=a.x-b.x,v1y=a.y-b.y,v2x=c.x-b.x,v2y=c.y-b.y;
+  var d=Math.hypot(v1x,v1y)*Math.hypot(v2x,v2y);
+  if(!d)return 180;
+  return Math.acos(Math.max(-1,Math.min(1,(v1x*v2x+v1y*v2y)/d)))*180/Math.PI;
 }
-$("#bgb").onclick=async function(){
-  if(busy)return;busy=true;
-  $("#bgb").disabled=true;$("#start").disabled=true;stage="bgcap";
-  for(var i=3;i>0;i--){big(i);status("Geh jetzt aus dem Bild …");beep(660,.08);await sleep(1000)}
-  big("");
-  var acc=new Float32Array(W*H),n=0;
-  for(var k=0;k<10;k++){var g=grab();if(g){for(var j=0;j<g.length;j++)acc[j]+=g[j];n++}await sleep(100)}
-  busy=false;
-  if(!n){status("Kein Kamerabild. Versuch es nochmal.");$("#bgb").disabled=false;stage="needbg";return}
-  bg=acc.map(function(x){return x/n});
-  beep(880,.15);prepare();
-};
+function process(lm,c,vw,vh){
+  var L=[11,13,15,23],R=[12,14,16,24];
+  var vis=function(ix){return ix.reduce(function(s,i){return s+(lm[i].visibility||0)},0)};
+  var ix=vis(L)>=vis(R)?L:R;
+  var p=ix.map(function(i){return{x:lm[i].x*vw,y:lm[i].y*vh,v:lm[i].visibility||0}});
+  c.lineWidth=6;c.lineCap="round";c.strokeStyle="#35d6ff";c.fillStyle="#ffd23f";
+  c.beginPath();c.moveTo(p[0].x,p[0].y);c.lineTo(p[1].x,p[1].y);c.lineTo(p[2].x,p[2].y);c.stroke();
+  c.strokeStyle="rgba(255,255,255,.7)";c.beginPath();c.moveTo(p[0].x,p[0].y);c.lineTo(p[3].x,p[3].y);c.stroke();
+  p.forEach(function(q){c.beginPath();c.arc(q.x,q.y,8,0,7);c.fill()});
+  if(Math.min(p[0].v,p[1].v,p[2].v)<.3){dbg("Arm nicht erkannt: ganz ins Bild, Seitenansicht");return}
+  var a=ang(p[0],p[1],p[2]);
+  sm=sm===null?a:sm*.5+a*.5;
+  var horiz=p[3].v<.3||Math.abs(p[0].x-p[3].x)>.8*Math.abs(p[0].y-p[3].y);
+  var s=+$("#sens").value,downT=85+s*5,upT=170-s*2.5;
+  dbg("Ellbogenwinkel: "+Math.round(sm)+"°   runter unter "+downT+"°, hoch über "+Math.round(upT)+"°"+(horiz?"":"   Körper nicht waagerecht"));
+  if(stage!=="run"||!horiz)return;
+  var now=performance.now();
+  if(state==="wait"){if(sm>upT)state="up"}
+  else if(state==="up"){if(sm<downT)state="down"}
+  else if(state==="down"&&sm>upT&&now-lastRep>350){state="up";lastRep=now;addRep(1)}
+}
+function loop(){
+  requestAnimationFrame(loop);
+  var v=$("#vid");
+  if(noCam||!lmk||!v.videoWidth||v.currentTime===lastT||$("#cam").classList.contains("hide"))return;
+  lastT=v.currentTime;
+  var res;
+  try{res=lmk.detectForVideo(v,performance.now())}catch(e){return}
+  var ov=$("#ov");
+  if(ov.width!==v.videoWidth){ov.width=v.videoWidth;ov.height=v.videoHeight}
+  var c=ov.getContext("2d");c.clearRect(0,0,ov.width,ov.height);
+  if(!res.landmarks||!res.landmarks.length){dbg("Niemand erkannt: ganz ins Bild, Seitenansicht");return}
+  process(res.landmarks[0],c,v.videoWidth,v.videoHeight);
+}
+requestAnimationFrame(loop);
+
+/* ---------- Spielablauf ---------- */
 $("#start").onclick=async function(){
-  if(busy||(!bg&&!noCam))return;busy=true;
-  $("#start").disabled=true;$("#bgb").disabled=true;stage="countdown";
+  if(busy)return;busy=true;
+  $("#start").disabled=true;stage="countdown";
   status("Geh in Liegestütz-Position, ganz im Bild, Seitenansicht.");
   for(var i=5;i>0;i--){big(i);beep(i===1?880:660,.1);await sleep(1000)}
   big("");beep(1000,.3);
-  count=0;sm=null;state="up";lastRep=0;t0=performance.now();
+  count=0;sm=null;state="wait";lastRep=0;t0=performance.now();
   $("#count").textContent="0";stage="run";busy=false;
   status("Los! Geh ganz runter und komm ganz hoch.");
 };
-function clock(){
+setInterval(function(){
+  if(stage!=="run")return;
   var el=(performance.now()-t0)/1000,m=MODES[S.mode];
-  if(m.time){var left=Math.max(0,m.time-el);$("#time").textContent=Math.ceil(left)+" s";if(left<=0)finish(el)}
-  else $("#time").textContent=el.toFixed(1)+" s";
-}
-function tick(){
-  if(stage==="bgcap")return;if(noCam){if(stage==="run")clock();return}if(!bg)return;
-  var g=grab();if(!g)return;
-  var n=0,sy=0,i,x,y,o;
-  for(i=0;i<W*H;i++){
-    var on=Math.abs(g[i]-bg[i])>32;
-    o=i*4;
-    mImg.data[o]=60;mImg.data[o+1]=200;mImg.data[o+2]=255;mImg.data[o+3]=on?255:0;
-    if(on){n++;sy+=(i/W|0)}
-  }
-  mx.putImageData(mImg,0,0);
-  var area=n/(W*H);
-  if(stage==="run"){
-    if(area>.015){
-      var cy=sy/n/H;
-      sm=sm===null?cy:sm*.6+cy*.4;
-      if(hi===0&&lo===0){hi=lo=sm}
-      hi=Math.max(sm,hi-.0002);lo=Math.min(sm,lo+.0002);
-      var minR=.05-(+$("#sens").value)*.004,r=hi-lo,now=performance.now();
-      if(r>minR){
-        if(state==="up"&&sm>lo+.7*r)state="down";
-        else if(state==="down"&&sm<lo+.3*r&&now-lastRep>450){state="up";lastRep=now;addRep(1)}
-      }
-    }
-    var el=(performance.now()-t0)/1000,m=MODES[S.mode];
-    if(m.time){
-      var left=Math.max(0,m.time-el);
-      $("#time").textContent=Math.ceil(left)+" s";
-      if(left<=0)finish(el);
-    }else{
-      $("#time").textContent=el.toFixed(1)+" s";
-    }
-  }
-}
+  if(m.time){
+    var left=Math.max(0,m.time-el);
+    $("#time").textContent=Math.ceil(left)+" s";
+    if(left<=0)finish(el);
+  }else $("#time").textContent=el.toFixed(1)+" s";
+},100);
 function addRep(d){
   if(stage!=="run")return;
   count=Math.max(0,count+d);
@@ -283,14 +287,13 @@ function addRep(d){
   if(m.target&&count>=m.target)finish((performance.now()-t0)/1000);
 }
 $("#plus").onclick=function(){addRep(1)};
-$(".stage").onpointerdown=function(){if(noCam)addRep(1)};
 $("#minus").onclick=function(){addRep(-1)};
-$("#sens").onchange=function(){hi=lo=0};
+$(".stage").onpointerdown=function(){if(noCam)addRep(1)};
 
 /* ---------- Ergebnis ---------- */
 function finish(el){
   if(stage!=="run")return;
-  stage="done";beep(500,.5);hi=lo=0;
+  stage="done";beep(500,.5);
   var m=MODES[S.mode];
   S.res[S.cur]={name:S.names[S.cur],count:count,time:el,ok:m.time?true:count>=m.target};
   if(S.two&&S.cur===0){S.cur=1;showResult(false)}else showResult(true);
@@ -325,13 +328,12 @@ function showResult(fin){
   }else{
     nx.classList.add("hide");$("#again").classList.remove("hide");
     $("#rt").textContent=win>=0?S.res[win].name+" gewinnt!":(S.res.length===2?"Unentschieden!":"Geschafft!");
-    var txt="",rec=false;
+    var rec=false;
     S.res.forEach(function(r){
       var v=m.time?r.count:(r.ok?Math.round(r.time*10)/10:null);
       if(v!==null&&saveBest(v))rec=true;
     });
-    txt=rec?"Neuer Rekord! ":"";
-    $("#rr").textContent=txt+fmtBest();
+    $("#rr").textContent=(rec?"Neuer Rekord! ":"")+fmtBest();
   }
 }
 $("#again").onclick=function(){S.cur=0;S.res=[];prepare()};
