@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Liegestütz-Challenge</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&display=swap">
+<style>
+:root{color-scheme:light;--bg:#eef1f6;--card:#fff;--fg:#101522;--mut:#5a6479;--line:#d5dbe8;--acc:#2457ff;--acct:#fff;--ok:#12a150;--bad:#d93a3a;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0d1220;--card:#161d30;--fg:#eef2fb;--mut:#97a3bd;--line:#26304a;--acc:#5b86ff;--acct:#0d1220;--ok:#3ddc84;--bad:#ff6b6b}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0d1220;--card:#161d30;--fg:#eef2fb;--mut:#97a3bd;--line:#26304a;--acc:#5b86ff;--acct:#0d1220;--ok:#3ddc84;--bad:#ff6b6b}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+main{max-width:760px;margin:0 auto;padding:20px 16px 40px}
+h1{font-family:"Barlow Condensed","Arial Narrow",Impact,sans-serif;font-weight:800;font-size:44px;line-height:1;margin:8px 0 6px;letter-spacing:.5px}
+h2{font-size:18px;margin:22px 0 8px}
+p{margin:0 0 10px;color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+label{display:block;font-weight:600;margin:10px 0 4px}
+input[type=text]{width:100%;font:inherit;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:14px 18px;background:var(--acc);color:var(--acct);cursor:pointer;min-height:48px}
+button.sec{background:transparent;color:var(--fg);border:1.5px solid var(--line)}
+button:disabled{opacity:.4;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.modes{display:grid;gap:8px}
+.mode{text-align:left;background:var(--bg);color:var(--fg);border:2px solid var(--line);font-weight:600}
+.mode[aria-pressed="true"]{border-color:var(--acc);background:var(--card)}
+.mode small{display:block;font-weight:400;color:var(--mut)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row>*{flex:1 1 140px}
+.hide{display:none!important}
+.stage{touch-action:manipulation;user-select:none;-webkit-user-select:none;position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:4/3}
+.stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#mask{opacity:.45;mix-blend-mode:screen}
+.hud{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;padding:10px 14px;pointer-events:none;font-family:"Barlow Condensed","Arial Narrow",Impact,sans-serif;font-weight:800;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.7)}
+#count{font-size:clamp(88px,26vw,170px);line-height:.9}
+#time{font-size:clamp(40px,10vw,64px);line-height:1}
+#big{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Barlow Condensed","Arial Narrow",Impact,sans-serif;font-weight:800;font-size:clamp(120px,40vw,260px);color:#fff;text-shadow:0 4px 20px rgba(0,0,0,.8);pointer-events:none}
+#status{min-height:2.9em;margin:12px 0 0;color:var(--fg);font-weight:600}
+.res{display:grid;gap:10px;margin:14px 0}
+.pl{display:flex;justify-content:space-between;align-items:baseline;padding:14px 16px;border-radius:14px;border:2px solid var(--line);background:var(--card)}
+.pl.win{border-color:var(--ok)}
+.pl b{font-size:18px}
+.pl span{font-family:"Barlow Condensed","Arial Narrow",Impact,sans-serif;font-weight:800;font-size:44px;line-height:1}
+.err{color:var(--bad);font-weight:600}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.chk{display:flex;gap:10px;align-items:center;font-weight:600;margin:14px 0 4px}
+.chk input{width:22px;height:22px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+
+<section id="setup">
+  <h1>Liegestütz-Challenge</h1>
+  <p>Das iPad zählt deine Liegestütze über die Kamera. Stell es seitlich auf den Boden, sodass dein ganzer Körper im Bild ist.</p>
+  <div class="card">
+    <label for="n1">Dein Name</label>
+    <input id="n1" type="text" value="Felix" maxlength="16" autocomplete="off">
+    <label class="chk"><input id="two" type="checkbox"> Freund einladen (nacheinander am selben iPad)</label>
+    <div id="n2w" class="hide">
+      <label for="n2">Name deines Freundes</label>
+      <input id="n2" type="text" value="Freund" maxlength="16" autocomplete="off">
+    </div>
+    <h2>Challenge</h2>
+    <div class="modes" id="modes"></div>
+    <p id="rec" style="margin-top:12px"></p>
+    <button id="go" style="width:100%;margin-top:6px">Kamera starten</button>
+    <button id="nocam" class="sec" style="width:100%;margin-top:10px">Ohne Kamera spielen (mit der Nase tippen)</button>
+    <p id="err" class="err" style="margin-top:10px"></p>
+  </div>
+</section>
+
+<section id="cam" class="hide">
+  <div class="row" style="margin-bottom:10px">
+    <b id="who" style="font-size:20px;flex:2 1 200px"></b>
+    <button class="sec" id="back">Zurück zum Menü</button>
+  </div>
+  <div class="stage">
+    <video id="vid" playsinline muted autoplay></video>
+    <canvas id="mask" width="80" height="60"></canvas>
+    <div class="hud"><div id="count">0</div><div id="time"></div></div>
+    <div id="big"></div>
+  </div>
+  <p id="status"></p>
+  <div class="row">
+    <button id="bgb">1. Hintergrund aufnehmen</button>
+    <button id="start" disabled>2. Start</button>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button class="sec" id="minus">−1</button>
+    <button class="sec" id="plus">+1 (manuell)</button>
+  </div>
+  <label for="sens">Empfindlichkeit</label>
+  <input id="sens" type="range" min="1" max="10" value="6">
+  <p>Tipp: Der helle Schleier im Bild zeigt, was die App als Körper erkennt. Zählt sie zu wenig, erhöhe die Empfindlichkeit.</p>
+</section>
+
+<section id="result" class="hide">
+  <h1 id="rt">Ergebnis</h1>
+  <div class="res" id="rl"></div>
+  <p id="rr"></p>
+  <div class="row">
+    <button id="next" class="hide"></button>
+    <button id="again">Nochmal</button>
+    <button class="sec" id="menu">Neue Challenge</button>
+  </div>
+</section>
+
+</main>
+<script>
+(function(){
+"use strict";
+var $=function(s){return document.querySelector(s)};
+var W=80,H=60;
+var MODES={
+  t60:{label:"60 Sekunden",desc:"So viele Liegestütze wie möglich in einer Minute",time:60},
+  t30:{label:"30 Sekunden",desc:"Kurzer Sprint, volle Power",time:30},
+  r10:{label:"Zeitrennen",desc:"10 Liegestütze so schnell wie möglich",target:10}
+};
+var S={mode:"t60",names:["",""],two:false,cur:0,res:[]};
+var grabCv=document.createElement("canvas");grabCv.width=W;grabCv.height=H;
+var gx=grabCv.getContext("2d",{willReadFrequently:true});
+var mx=$("#mask").getContext("2d");
+var mImg=mx.createImageData(W,H);
+var bg=null,stream=null,stage="idle",timer=null,audio=null,noCam=false;
+var sm=null,hi=0,lo=0,state="up",lastRep=0,t0=0,count=0,busy=false;
+
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function show(id){["setup","cam","result"].forEach(function(s){$("#"+s).classList.toggle("hide",s!==id)})}
+function status(t){$("#status").textContent=t}
+function big(t){$("#big").textContent=t}
+function beep(f,d){
+  try{
+    if(!audio)audio=new (window.AudioContext||window.webkitAudioContext)();
+    if(audio.state==="suspended")audio.resume();
+    var o=audio.createOscillator(),g=audio.createGain();
+    o.frequency.value=f;g.gain.value=.12;o.connect(g);g.connect(audio.destination);
+    o.start();o.stop(audio.currentTime+d);
+  }catch(e){}
+}
+function best(){
+  try{var v=localStorage.getItem("pc-best-"+S.mode);return v?parseFloat(v):null}catch(e){return null}
+}
+function saveBest(v){
+  try{
+    var b=best(),m=MODES[S.mode];
+    if(b===null||(m.time?v>b:v<b)){localStorage.setItem("pc-best-"+S.mode,String(v));return true}
+  }catch(e){}
+  return false;
+}
+function fmtBest(){
+  var b=best();
+  if(b===null)return "Noch kein Rekord. Mach den ersten!";
+  return "Dein Rekord: "+(MODES[S.mode].time?b+" Liegestütze":b.toFixed(1)+" Sekunden");
+}
+
+/* ---------- Menü ---------- */
+function buildModes(){
+  var box=$("#modes");box.innerHTML="";
+  Object.keys(MODES).forEach(function(k){
+    var b=document.createElement("button");
+    b.className="mode";b.setAttribute("aria-pressed",k===S.mode);
+    b.innerHTML=esc(MODES[k].label)+"<small>"+esc(MODES[k].desc)+"</small>";
+    b.onclick=function(){S.mode=k;buildModes();$("#rec").textContent=fmtBest()};
+    box.appendChild(b);
+  });
+  $("#rec").textContent=fmtBest();
+}
+$("#two").onchange=function(){$("#n2w").classList.toggle("hide",!this.checked)};
+$("#go").onclick=async function(){
+  S.two=$("#two").checked;
+  S.names=[$("#n1").value.trim()||"Spieler 1",$("#n2").value.trim()||"Spieler 2"];
+  S.cur=0;S.res=[];noCam=false;
+  beep(1,.01);
+  try{
+    if(!stream){
+      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}},audio:false});
+      var v=$("#vid");v.srcObject=stream;await v.play();
+      if(!timer)timer=setInterval(tick,50);
+    }
+    $("#err").textContent="";
+    prepare();
+  }catch(e){
+    var inFrame=false;try{inFrame=window.self!==window.top}catch(x){inFrame=true}
+    $("#err").textContent="Kamera nicht verfügbar ("+(e&&e.name?e.name:"Fehler")+(window.isSecureContext?"":", keine sichere Verbindung")+(inFrame?", Seite läuft eingebettet":"")+"). Du kannst stattdessen ohne Kamera spielen: Tippe bei jedem Liegestütz mit der Nase auf den Bildschirm.";
+  }
+};
+$("#nocam").onclick=function(){
+  S.two=$("#two").checked;
+  S.names=[$("#n1").value.trim()||"Spieler 1",$("#n2").value.trim()||"Spieler 2"];
+  S.cur=0;S.res=[];noCam=true;beep(1,.01);
+  if(!timer)timer=setInterval(tick,50);
+  prepare();
+};
+function prepare(){
+  show("cam");stage=(bg||noCam)?"ready":"needbg";count=0;
+  $("#vid").style.display=noCam?"none":"";$("#mask").style.display=noCam?"none":"";$("#bgb").classList.toggle("hide",noCam);
+  $("#count").textContent="0";$("#time").textContent="";big("");
+  $("#who").textContent="Dran ist: "+S.names[S.cur];
+  $("#start").disabled=!(bg||noCam);$("#bgb").disabled=false;
+  status(noCam?"Stell das iPad auf den Boden. Bei jedem Liegestütz tippst du mit der Nase auf den Bildschirm. Drück dann Start.":bg?"Hintergrund gespeichert. Geh in Position und drück Start.":"Zuerst den leeren Hintergrund aufnehmen: Drück den Knopf und geh danach aus dem Bild.");
+}
+
+/* ---------- Kamera und Erkennung ---------- */
+function grab(){
+  var v=$("#vid");if(!v.videoWidth)return null;
+  gx.drawImage(v,0,0,W,H);
+  var d=gx.getImageData(0,0,W,H).data,g=new Float32Array(W*H);
+  for(var i=0;i<W*H;i++)g[i]=d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11;
+  return g;
+}
+$("#bgb").onclick=async function(){
+  if(busy)return;busy=true;
+  $("#bgb").disabled=true;$("#start").disabled=true;stage="bgcap";
+  for(var i=3;i>0;i--){big(i);status("Geh jetzt aus dem Bild …");beep(660,.08);await sleep(1000)}
+  big("");
+  var acc=new Float32Array(W*H),n=0;
+  for(var k=0;k<10;k++){var g=grab();if(g){for(var j=0;j<g.length;j++)acc[j]+=g[j];n++}await sleep(100)}
+  busy=false;
+  if(!n){status("Kein Kamerabild. Versuch es nochmal.");$("#bgb").disabled=false;stage="needbg";return}
+  bg=acc.map(function(x){return x/n});
+  beep(880,.15);prepare();
+};
+$("#start").onclick=async function(){
+  if(busy||(!bg&&!noCam))return;busy=true;
+  $("#start").disabled=true;$("#bgb").disabled=true;stage="countdown";
+  status("Geh in Liegestütz-Position, ganz im Bild, Seitenansicht.");
+  for(var i=5;i>0;i--){big(i);beep(i===1?880:660,.1);await sleep(1000)}
+  big("");beep(1000,.3);
+  count=0;sm=null;state="up";lastRep=0;t0=performance.now();
+  $("#count").textContent="0";stage="run";busy=false;
+  status("Los! Geh ganz runter und komm ganz hoch.");
+};
+function clock(){
+  var el=(performance.now()-t0)/1000,m=MODES[S.mode];
+  if(m.time){var left=Math.max(0,m.time-el);$("#time").textContent=Math.ceil(left)+" s";if(left<=0)finish(el)}
+  else $("#time").textContent=el.toFixed(1)+" s";
+}
+function tick(){
+  if(stage==="bgcap")return;if(noCam){if(stage==="run")clock();return}if(!bg)return;
+  var g=grab();if(!g)return;
+  var n=0,sy=0,i,x,y,o;
+  for(i=0;i<W*H;i++){
+    var on=Math.abs(g[i]-bg[i])>32;
+    o=i*4;
+    mImg.data[o]=60;mImg.data[o+1]=200;mImg.data[o+2]=255;mImg.data[o+3]=on?255:0;
+    if(on){n++;sy+=(i/W|0)}
+  }
+  mx.putImageData(mImg,0,0);
+  var area=n/(W*H);
+  if(stage==="run"){
+    if(area>.015){
+      var cy=sy/n/H;
+      sm=sm===null?cy:sm*.6+cy*.4;
+      if(hi===0&&lo===0){hi=lo=sm}
+      hi=Math.max(sm,hi-.0002);lo=Math.min(sm,lo+.0002);
+      var minR=.05-(+$("#sens").value)*.004,r=hi-lo,now=performance.now();
+      if(r>minR){
+        if(state==="up"&&sm>lo+.7*r)state="down";
+        else if(state==="down"&&sm<lo+.3*r&&now-lastRep>450){state="up";lastRep=now;addRep(1)}
+      }
+    }
+    var el=(performance.now()-t0)/1000,m=MODES[S.mode];
+    if(m.time){
+      var left=Math.max(0,m.time-el);
+      $("#time").textContent=Math.ceil(left)+" s";
+      if(left<=0)finish(el);
+    }else{
+      $("#time").textContent=el.toFixed(1)+" s";
+    }
+  }
+}
+function addRep(d){
+  if(stage!=="run")return;
+  count=Math.max(0,count+d);
+  $("#count").textContent=count;
+  if(d>0)beep(520,.06);
+  var m=MODES[S.mode];
+  if(m.target&&count>=m.target)finish((performance.now()-t0)/1000);
+}
+$("#plus").onclick=function(){addRep(1)};
+$(".stage").onpointerdown=function(){if(noCam)addRep(1)};
+$("#minus").onclick=function(){addRep(-1)};
+$("#sens").onchange=function(){hi=lo=0};
+
+/* ---------- Ergebnis ---------- */
+function finish(el){
+  if(stage!=="run")return;
+  stage="done";beep(500,.5);hi=lo=0;
+  var m=MODES[S.mode];
+  S.res[S.cur]={name:S.names[S.cur],count:count,time:el,ok:m.time?true:count>=m.target};
+  if(S.two&&S.cur===0){S.cur=1;showResult(false)}else showResult(true);
+}
+function score(r){
+  return MODES[S.mode].time?r.count+" ":r.ok?r.time.toFixed(1)+" s":r.count+"/"+MODES[S.mode].target;
+}
+function showResult(fin){
+  show("result");
+  var box=$("#rl");box.innerHTML="";
+  var m=MODES[S.mode],win=-1;
+  if(fin&&S.res.length===2){
+    var a=S.res[0],b=S.res[1];
+    if(m.time){win=a.count===b.count?-1:a.count>b.count?0:1}
+    else if(a.ok&&b.ok){win=a.time===b.time?-1:a.time<b.time?0:1}
+    else if(a.ok!==b.ok){win=a.ok?0:1}
+    else win=a.count===b.count?-1:a.count>b.count?0:1;
+  }
+  S.res.forEach(function(r,i){
+    var d=document.createElement("div");
+    d.className="pl"+(i===win?" win":"");
+    d.innerHTML="<b>"+esc(r.name)+(i===win?" 🏆":"")+"</b><span>"+esc(score(r))+"</span>";
+    box.appendChild(d);
+  });
+  var nx=$("#next");
+  if(!fin){
+    $("#rt").textContent="Stark, "+S.res[0].name+"!";
+    nx.classList.remove("hide");nx.textContent="Weiter: "+S.names[1];
+    nx.onclick=function(){prepare()};
+    $("#rr").textContent="Jetzt ist "+S.names[1]+" dran. Stell das iPad so hin, dass dein Freund gut im Bild ist.";
+    $("#again").classList.add("hide");
+  }else{
+    nx.classList.add("hide");$("#again").classList.remove("hide");
+    $("#rt").textContent=win>=0?S.res[win].name+" gewinnt!":(S.res.length===2?"Unentschieden!":"Geschafft!");
+    var txt="",rec=false;
+    S.res.forEach(function(r){
+      var v=m.time?r.count:(r.ok?Math.round(r.time*10)/10:null);
+      if(v!==null&&saveBest(v))rec=true;
+    });
+    txt=rec?"Neuer Rekord! ":"";
+    $("#rr").textContent=txt+fmtBest();
+  }
+}
+$("#again").onclick=function(){S.cur=0;S.res=[];prepare()};
+$("#menu").onclick=function(){S.cur=0;S.res=[];buildModes();show("setup")};
+$("#back").onclick=function(){stage="idle";S.cur=0;S.res=[];buildModes();show("setup")};
+
+buildModes();
+})();
+</script>
+</body>
+</html>
